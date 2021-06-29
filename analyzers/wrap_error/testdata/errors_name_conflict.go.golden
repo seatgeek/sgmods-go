@@ -1,0 +1,38 @@
+package testdata
+
+import (
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	"./errors"
+	errorsPkg "github.com/pkg/errors"
+)
+
+func readFileErrorsNameConflict(name string) ([]byte, error) {
+	file, err := os.Open(name)
+	if err != nil {
+		return nil, errorsPkg.Wrap(errors.ErrOpenFile, err.Error()) // want `unwrapped error found 'return nil, errors.ErrOpenFile'`
+	}
+
+	var body []byte
+	if _, err = file.Read(body); err != nil {
+		return nil, errorsPkg.Wrap(errors.ErrReadFile, err.Error()) // want `unwrapped error found 'return nil, errors.ErrReadFile'`
+	}
+
+	if time.Now().UTC().Weekday() == time.Friday {
+		return nil, errors.ErrFriday
+	}
+
+	return body, nil
+}
+
+func mainErrorsNameConflict() {
+	body, err := readFileErrorsNameConflict(os.Args[1])
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(body)
+}

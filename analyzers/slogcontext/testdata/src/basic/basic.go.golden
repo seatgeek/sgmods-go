@@ -1,0 +1,17 @@
+package main
+
+import (
+	"context"
+	"log/slog"
+)
+
+func main() {
+	run(context.Background())
+}
+
+func run(ctx context.Context) {
+	slog.DebugContext(ctx, "debug msg")
+	slog.InfoContext(ctx, "info msg")
+	slog.WarnContext(ctx, "warn msg")
+	slog.ErrorContext(ctx, "error msg")
+}

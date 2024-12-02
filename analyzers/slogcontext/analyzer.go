@@ -45,10 +45,32 @@ var SlogContextAnalyzer = &analysis.Analyzer{
 				return false
 			}
 
+			availableCtx := availableContext(stack)
+			newCallExpr := *callExpr
+			newCallExpr.Fun.(*ast.SelectorExpr).Sel.Name += "Context"
+			if availableCtx == "" {
+				newCallExpr.Args = append([]ast.Expr{ast.NewIdent("context.TODO()")}, newCallExpr.Args...)
+			} else {
+				newCallExpr.Args = append([]ast.Expr{ast.NewIdent(availableCtx)}, newCallExpr.Args...)
+			}
+			newText := util.Render(&newCallExpr, pass.Fset)
+
 			pass.Report(analysis.Diagnostic{
 				Pos:     node.Pos(),
 				End:     node.End(),
 				Message: "context not passed to slog call",
+				SuggestedFixes: []analysis.SuggestedFix{
+					{
+						Message: "Add context to slog call",
+						TextEdits: []analysis.TextEdit{
+							{
+								Pos:     node.Pos(),
+								End:     node.End(),
+								NewText: []byte(newText),
+							},
+						},
+					},
+				},
 			})
 
 			return false
@@ -56,6 +78,30 @@ var SlogContextAnalyzer = &analysis.Analyzer{
 
 		return nil, nil
 	},
+}
+
+func availableContext(stack []ast.Node) string {
+	fn := containingFunc(stack)
+	if fn == nil || fn.Type.Params.NumFields() == 0 {
+		return ""
+	}
+
+	firstArg := fn.Type.Params.List[0]
+	if selectorMatches(firstArg.Type, "context", "Context") {
+		return firstArg.Names[0].Name
+	}
+
+	return ""
+}
+
+func containingFunc(stack []ast.Node) *ast.FuncDecl {
+	for i := 0; i < len(stack); i++ {
+		if fn, ok := stack[i].(*ast.FuncDecl); ok {
+			return fn
+		}
+	}
+
+	return nil
 }
 
 // returns the slog call name, false if not an slog call
@@ -75,4 +121,26 @@ func determineSlogCall(callExpr *ast.CallExpr) (string, bool) {
 	}
 
 	return selector.Sel.Name, true
+}
+
+func selectorMatches(node ast.Node, x string, y string) bool {
+	selector, ok := node.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+
+	xIdent, ok := selector.X.(*ast.Ident)
+	if !ok {
+		return false
+	}
+
+	if xIdent.Name != x {
+		return false
+	}
+
+	if selector.Sel.Name != y {
+		return false
+	}
+
+	return true
 }

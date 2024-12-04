@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 
+	"github.com/gostaticanalysis/analysisutil"
 	"github.com/seatgeek/sgmods-go/pkg/util"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
@@ -11,9 +12,10 @@ import (
 )
 
 const slogPackage = "log/slog"
+const analyzerName = "slogcontext"
 
 var SlogContextAnalyzer = &analysis.Analyzer{
-	Name:     "slogcontext",
+	Name:     analyzerName,
 	Doc:      "check that context is passed to all slog calls",
 	Requires: []*analysis.Analyzer{inspect.Analyzer},
 	Run: func(pass *analysis.Pass) (interface{}, error) {
@@ -54,7 +56,7 @@ var SlogContextAnalyzer = &analysis.Analyzer{
 			}
 			newText := util.Render(&newCallExpr, pass.Fset)
 
-			pass.Report(analysis.Diagnostic{
+			analysisutil.ReportWithoutIgnore(pass, analyzerName)(analysis.Diagnostic{
 				Pos:     node.Pos(),
 				End:     node.End(),
 				Message: "context not passed to slog call",

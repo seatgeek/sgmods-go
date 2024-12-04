@@ -119,7 +119,7 @@ func availableContext(fn *ast.FuncDecl) string {
 		return firstArg.Names[0].Name
 	}
 
-	if starExpr := firstArg.Type.(*ast.StarExpr); starExpr != nil {
+	if starExpr, ok := firstArg.Type.(*ast.StarExpr); ok {
 		if selectorMatches(starExpr.X, "http", "Request") {
 			return "r.Context()"
 		}

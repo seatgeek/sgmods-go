@@ -121,7 +121,7 @@ func availableContext(fn *ast.FuncDecl) string {
 
 	if starExpr, ok := firstArg.Type.(*ast.StarExpr); ok {
 		if selectorMatches(starExpr.X, "http", "Request") {
-			return "r.Context()"
+			return fmt.Sprintf("%s.Context()", firstArg.Names[0].Name)
 		}
 	}
 

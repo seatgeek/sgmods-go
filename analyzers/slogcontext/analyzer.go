@@ -46,12 +46,40 @@ var SlogContextAnalyzer = &analysis.Analyzer{
 				return false
 			}
 
-			availableCtx := availableContext(stack)
+			containingFunc := containingFunc(stack)
+			availableCtx := availableContext(containingFunc)
 			newCallExpr := *callExpr
 			newCallExpr.Fun.(*ast.SelectorExpr).Sel.Name += "Context"
-			if availableCtx == "" {
+			switch availableCtx {
+			case "":
 				newCallExpr.Args = append([]ast.Expr{ast.NewIdent("context.TODO()")}, newCallExpr.Args...)
-			} else {
+			case "_":
+				newCallExpr.Args = append([]ast.Expr{ast.NewIdent("ctx")}, newCallExpr.Args...)
+
+				// rename our blank context to ctx
+				ctxParam := containingFunc.Type.Params.List[0].Names[0]
+				pos := ctxParam.Pos()
+				end := ctxParam.End()
+				ctxParam.Name = "ctx"
+
+				analysisutil.ReportWithoutIgnore(pass, analyzerName)(analysis.Diagnostic{
+					Pos:     containingFunc.Pos(),
+					End:     containingFunc.End(),
+					Message: "context needed by slog call is blank",
+					SuggestedFixes: []analysis.SuggestedFix{
+						{
+							Message: "Rename blank context to 'ctx'",
+							TextEdits: []analysis.TextEdit{
+								{
+									Pos:     pos,
+									End:     end,
+									NewText: []byte(util.Render(ctxParam, pass.Fset)),
+								},
+							},
+						},
+					},
+				})
+			default:
 				newCallExpr.Args = append([]ast.Expr{ast.NewIdent(availableCtx)}, newCallExpr.Args...)
 			}
 			newText := util.Render(&newCallExpr, pass.Fset)
@@ -81,8 +109,7 @@ var SlogContextAnalyzer = &analysis.Analyzer{
 	},
 }
 
-func availableContext(stack []ast.Node) string {
-	fn := containingFunc(stack)
+func availableContext(fn *ast.FuncDecl) string {
 	if fn == nil || fn.Type.Params.NumFields() == 0 {
 		return ""
 	}

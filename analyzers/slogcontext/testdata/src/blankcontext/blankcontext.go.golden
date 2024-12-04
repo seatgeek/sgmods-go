@@ -1,0 +1,14 @@
+package main
+
+import (
+	"context"
+	"log/slog"
+)
+
+func main() {
+	run(context.Background())
+}
+
+func run(ctx context.Context) { // want `context needed by slog call is blank`
+	slog.InfoContext(ctx, "hello world") // want `context not passed to slog call`
+}

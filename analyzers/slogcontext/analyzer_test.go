@@ -7,5 +7,5 @@ import (
 )
 
 func TestWrapErrorAnalyzer(t *testing.T) {
-	analysistest.RunWithSuggestedFixes(t, analysistest.TestData(), SlogContextAnalyzer, "basic", "ignore")
+	analysistest.RunWithSuggestedFixes(t, analysistest.TestData(), SlogContextAnalyzer, "basic", "ignore", "blankcontext")
 }

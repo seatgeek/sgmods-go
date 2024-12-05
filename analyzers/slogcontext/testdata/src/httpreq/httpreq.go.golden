@@ -6,14 +6,14 @@ import (
 )
 
 func main() {
-	run(&http.Request{})
-	run2(&http.Request{})
+	run(nil, &http.Request{})
+	run2(nil, &http.Request{})
 }
 
-func run(r *http.Request) {
+func run(w http.ResponseWriter, r *http.Request) {
 	slog.InfoContext(r.Context(), "hello world") // want `context not passed to slog call`
 }
 
-func run2(req *http.Request) {
+func run2(w http.ResponseWriter, req *http.Request) {
 	slog.InfoContext(req.Context(), "hello world") // want `context not passed to slog call`
 }

@@ -114,14 +114,18 @@ func availableContext(fn *ast.FuncDecl) string {
 		return ""
 	}
 
+	// first arg is context
 	firstArg := fn.Type.Params.List[0]
 	if selectorMatches(firstArg.Type, "context", "Context") {
 		return firstArg.Names[0].Name
 	}
 
-	if starExpr, ok := firstArg.Type.(*ast.StarExpr); ok {
-		if selectorMatches(starExpr.X, "http", "Request") {
-			return fmt.Sprintf("%s.Context()", firstArg.Names[0].Name)
+	// any arg is a pointer to http.Request
+	for _, arg := range fn.Type.Params.List {
+		if starExpr, ok := arg.Type.(*ast.StarExpr); ok {
+			if selectorMatches(starExpr.X, "http", "Request") {
+				return fmt.Sprintf("%s.Context()", arg.Names[0].Name)
+			}
 		}
 	}
 

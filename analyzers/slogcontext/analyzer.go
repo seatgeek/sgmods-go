@@ -1,0 +1,184 @@
+package slogcontext
+
+import (
+	"fmt"
+	"go/ast"
+
+	"github.com/gostaticanalysis/analysisutil"
+	"github.com/seatgeek/sgmods-go/pkg/util"
+	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/analysis/passes/inspect"
+	"golang.org/x/tools/go/ast/inspector"
+)
+
+const slogPackage = "log/slog"
+const analyzerName = "slogcontext"
+
+var SlogContextAnalyzer = &analysis.Analyzer{
+	Name:     analyzerName,
+	Doc:      "check that context is passed to all slog calls",
+	Requires: []*analysis.Analyzer{inspect.Analyzer},
+	Run: func(pass *analysis.Pass) (interface{}, error) {
+		if !util.Imports(pass.Pkg, slogPackage) {
+			return nil, nil
+		}
+
+		nodeFilter := []ast.Node{
+			(*ast.CallExpr)(nil),
+		}
+
+		inspector := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
+		inspector.WithStack(nodeFilter, func(node ast.Node, push bool, stack []ast.Node) bool {
+			callExpr, ok := node.(*ast.CallExpr)
+			if !ok {
+				panic(fmt.Sprintf("unexpected node type %T", node))
+			}
+
+			slogCall, ok := determineSlogCall(callExpr)
+			if !ok {
+				return false
+			}
+
+			switch slogCall {
+			case "Debug", "Info", "Warn", "Error":
+				break
+			default:
+				return false
+			}
+
+			containingFunc := containingFunc(stack)
+			availableCtx := availableContext(containingFunc)
+			newCallExpr := *callExpr
+			newCallExpr.Fun.(*ast.SelectorExpr).Sel.Name += "Context"
+			switch availableCtx {
+			case "":
+				newCallExpr.Args = append([]ast.Expr{ast.NewIdent("context.TODO()")}, newCallExpr.Args...)
+			case "_":
+				newCallExpr.Args = append([]ast.Expr{ast.NewIdent("ctx")}, newCallExpr.Args...)
+
+				// rename our blank context to ctx
+				ctxParam := containingFunc.Type.Params.List[0].Names[0]
+				pos := ctxParam.Pos()
+				end := ctxParam.End()
+				ctxParam.Name = "ctx"
+
+				analysisutil.ReportWithoutIgnore(pass, analyzerName)(analysis.Diagnostic{
+					Pos:     containingFunc.Pos(),
+					End:     containingFunc.End(),
+					Message: "context needed by slog call is blank",
+					SuggestedFixes: []analysis.SuggestedFix{
+						{
+							Message: "Rename blank context to 'ctx'",
+							TextEdits: []analysis.TextEdit{
+								{
+									Pos:     pos,
+									End:     end,
+									NewText: []byte(util.Render(ctxParam, pass.Fset)),
+								},
+							},
+						},
+					},
+				})
+			default:
+				newCallExpr.Args = append([]ast.Expr{ast.NewIdent(availableCtx)}, newCallExpr.Args...)
+			}
+			newText := util.Render(&newCallExpr, pass.Fset)
+
+			analysisutil.ReportWithoutIgnore(pass, analyzerName)(analysis.Diagnostic{
+				Pos:     node.Pos(),
+				End:     node.End(),
+				Message: "context not passed to slog call",
+				SuggestedFixes: []analysis.SuggestedFix{
+					{
+						Message: "Add context to slog call",
+						TextEdits: []analysis.TextEdit{
+							{
+								Pos:     node.Pos(),
+								End:     node.End(),
+								NewText: []byte(newText),
+							},
+						},
+					},
+				},
+			})
+
+			return false
+		})
+
+		return nil, nil
+	},
+}
+
+func availableContext(fn *ast.FuncDecl) string {
+	if fn == nil || fn.Type.Params.NumFields() == 0 {
+		return ""
+	}
+
+	// first arg is context
+	firstArg := fn.Type.Params.List[0]
+	if selectorMatches(firstArg.Type, "context", "Context") {
+		return firstArg.Names[0].Name
+	}
+
+	// any arg is a pointer to http.Request
+	for _, arg := range fn.Type.Params.List {
+		if starExpr, ok := arg.Type.(*ast.StarExpr); ok {
+			if selectorMatches(starExpr.X, "http", "Request") {
+				return fmt.Sprintf("%s.Context()", arg.Names[0].Name)
+			}
+		}
+	}
+
+	return ""
+}
+
+func containingFunc(stack []ast.Node) *ast.FuncDecl {
+	for i := 0; i < len(stack); i++ {
+		if fn, ok := stack[i].(*ast.FuncDecl); ok {
+			return fn
+		}
+	}
+
+	return nil
+}
+
+// returns the slog call name, false if not an slog call
+func determineSlogCall(callExpr *ast.CallExpr) (string, bool) {
+	selector, ok := callExpr.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return "", false
+	}
+
+	x, ok := selector.X.(*ast.Ident)
+	if !ok {
+		return "", false
+	}
+
+	if x.Name != "slog" {
+		return "", false
+	}
+
+	return selector.Sel.Name, true
+}
+
+func selectorMatches(node ast.Node, x string, y string) bool {
+	selector, ok := node.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+
+	xIdent, ok := selector.X.(*ast.Ident)
+	if !ok {
+		return false
+	}
+
+	if xIdent.Name != x {
+		return false
+	}
+
+	if selector.Sel.Name != y {
+		return false
+	}
+
+	return true
+}

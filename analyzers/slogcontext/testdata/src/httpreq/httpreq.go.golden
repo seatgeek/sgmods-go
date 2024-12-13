@@ -1,0 +1,19 @@
+package main
+
+import (
+	"log/slog"
+	"net/http"
+)
+
+func main() {
+	run(nil, &http.Request{})
+	run2(nil, &http.Request{})
+}
+
+func run(w http.ResponseWriter, r *http.Request) {
+	slog.InfoContext(r.Context(), "hello world") // want `context not passed to slog call`
+}
+
+func run2(w http.ResponseWriter, req *http.Request) {
+	slog.InfoContext(req.Context(), "hello world") // want `context not passed to slog call`
+}

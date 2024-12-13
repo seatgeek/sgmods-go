@@ -1,0 +1,26 @@
+package main
+
+import (
+	"context"
+	"log/slog"
+)
+
+func main() {
+	run(context.Background())
+
+	slog.DebugContext(context.TODO(), "main debug msg") // want `context not passed to slog call`
+
+	slog.DebugContext(context.Background(), "main debug msg with ctx")
+}
+
+func run(ctx context.Context) {
+	slog.DebugContext(ctx, "debug msg") // want `context not passed to slog call`
+	slog.InfoContext(ctx, "info msg")   // want `context not passed to slog call`
+	slog.WarnContext(ctx, "warn msg")   // want `context not passed to slog call`
+	slog.ErrorContext(ctx, "error msg") // want `context not passed to slog call`
+
+	slog.DebugContext(ctx, "debug msg with ctx")
+	slog.InfoContext(ctx, "info msg with ctx")
+	slog.WarnContext(ctx, "warn msg with ctx")
+	slog.ErrorContext(ctx, "error msg with ctx")
+}

@@ -1,14 +1,13 @@
 package wrap_error
 
 import (
-	"bytes"
 	"fmt"
 	"go/ast"
-	"go/printer"
 	"go/token"
 	"strings"
 
 	"github.com/seatgeek/sgmods-go/analyzers"
+	"github.com/seatgeek/sgmods-go/pkg/util"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
@@ -82,7 +81,7 @@ var WrapErrorAnalyzer = &analysis.Analyzer{
 									{
 										Pos:     pos,
 										End:     end,
-										NewText: []byte(render(importGenDecl, pass.Fset)),
+										NewText: []byte(util.Render(importGenDecl, pass.Fset)),
 									},
 								},
 							},
@@ -139,8 +138,8 @@ var WrapErrorAnalyzer = &analysis.Analyzer{
 							},
 						}
 
-						old := render(returnStmt, pass.Fset)
-						new := render(suggested, pass.Fset)
+						old := util.Render(returnStmt, pass.Fset)
+						new := util.Render(suggested, pass.Fset)
 
 						pass.Report(analysis.Diagnostic{
 							Pos:     returnStmt.Pos(),
@@ -212,10 +211,4 @@ func findImportGenDecl(node *ast.File) (*ast.GenDecl, bool) {
 	}
 
 	return nil, false
-}
-
-func render(node interface{}, fset *token.FileSet) string {
-	buf := bytes.Buffer{}
-	printer.Fprint(&buf, fset, node)
-	return buf.String()
 }
